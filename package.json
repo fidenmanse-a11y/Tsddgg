@@ -14,13 +14,13 @@
     "@fontsource/inter": "5.1.0",
     "@fontsource/pixelify-sans": "^5.1.0",
     "@fontsource/roboto": "^5.1.0",
-    "@remotion/cli": "4.0.290",
+    "@remotion/cli": "4.0.545",
     "@remotion/media-utils": "4.0.290",
     "@remotion/motion-blur": "4.0.290",
     "@remotion/noise": "4.0.290",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "remotion": "4.0.290"
+    "remotion": "4.0.410"
   },
   "devDependencies": {
     "@types/react": "18.3.12",
