@@ -1,16 +1,22 @@
 """Audio + Beat-Raster für den Revanchie-Phonk-Short.
 
-Musik-Quelle (src/short/config.json -> "musicFile"):
-  * leer / nicht vorhanden  -> eigener Beat audio/short/music/phonk_slowed.wav (Raster bekannt)
-  * z. B. "audio/short/music/medusa.mp3" -> Beats + Drop werden automatisch erkannt (librosa).
-    Optional "dropAt": Sekunde des Drops im Song, falls die Erkennung danebenliegt.
+src/short/config.json:
+  musicFile   leer -> eigener Beat (audio/short/music/phonk_slowed.wav)
+              sonst Audio- ODER Videodatei (z. B. Bildschirmaufnahme .mp4); Beats werden erkannt (librosa)
+  unit        "seconds" (Zeiten im Song / in der Aufnahme) oder "beats" (Index der erkannten Beats)
+  sections    [[Art, Start], ...]  Art: intro | A (Schnitt alle 2 Beats) | R (jeder Beat) | S (3D-Karte) | O (Logo/Endcard)
+  steps       Schnitt-Abstand in Beats je Art
+  end         Ende (gleiche Einheit), optional
+  ownBeatSections / ownBeatEnd   Abschnitte für den eigenen Beat (in Beats)
 
 Schreibt: public/audio/short.wav, src/short/beats.json
 Aufruf:   python audio/short/build_short.py
 """
 import json
 import os
+import subprocess
 import sys
+import tempfile
 
 import numpy as np
 import soundfile as sf
@@ -23,15 +29,11 @@ from dsp import SR, Bus, fade, impact, load, lp, reverb, sec, stereo, whoosh  # 
 
 CFG = json.load(open(f"{ROOT}/src/short/config.json"))
 FPS = CFG["fps"]
-DROP = CFG["dropBeat"]
-TOTAL = CFG["totalBeats"]
 
 
 def load_music(path):
-    """Audio- ODER Videodatei (z. B. Bildschirmaufnahme .mp4/.mov) -> Stereo 48 kHz."""
+    """Audio- ODER Videodatei -> Stereo 48 kHz."""
     if os.path.splitext(path)[1].lower() not in (".wav", ".flac", ".ogg"):
-        import subprocess
-        import tempfile
         tmp = os.path.join(tempfile.mkdtemp(), "music.wav")
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", path, "-vn", "-ac", "2", "-ar", str(SR), tmp], check=True)
         path = tmp
@@ -46,49 +48,59 @@ def load_music(path):
 
 music_file = CFG.get("musicFile") or ""
 music_path = music_file if os.path.isabs(music_file) else f"{ROOT}/{music_file}"
-if music_file and os.path.exists(music_path):
+real_song = bool(music_file) and os.path.exists(music_path)
+
+if real_song:
     import librosa
 
     song = load_music(music_path)
-    mono = song.mean(0).astype(np.float32)
-    y22 = librosa.resample(mono, orig_sr=SR, target_sr=22050)
+    y22 = librosa.resample(song.mean(0).astype(np.float32), orig_sr=SR, target_sr=22050)
     tempo, frames = librosa.beat.beat_track(y=y22, sr=22050, units="frames", tightness=120)
     beat_t = librosa.frames_to_time(frames, sr=22050)
-    # Energie im Bassbereich pro Beat -> Drop = größter Energiesprung
-    S = np.abs(librosa.stft(y22, n_fft=2048, hop_length=512))
-    freqs = librosa.fft_frequencies(sr=22050, n_fft=2048)
-    low = S[freqs < 150].sum(0)
-    bt_frames = librosa.time_to_frames(beat_t, sr=22050, hop_length=512)
-    e = np.array([low[a:b].mean() if b > a else 0 for a, b in zip(bt_frames[:-1], bt_frames[1:])])
-    if CFG.get("dropAt") is not None:
-        di = int(np.argmin(np.abs(beat_t - CFG["dropAt"])))
-    else:
-        # nur Drops, nach denen noch genug Song für den ganzen Edit kommt
-        room = TOTAL - DROP
-        score = [e[i:i + 8].mean() - e[max(0, i - 8):i].mean() if i >= DROP and i + room < len(beat_t) and i + 8 < len(e) else -1e9 for i in range(len(e))]
-        di = int(np.argmax(score))
-    start_i = di - DROP
-    if start_i < 0 or start_i + TOTAL >= len(beat_t):
-        raise SystemExit(f"Song zu kurz/Drop zu früh für {TOTAL} Beats (Drop-Beat {di}).")
-    beats_s = beat_t[start_i: start_i + TOTAL + 1] - beat_t[start_i]
-    music = song[:, sec(beat_t[start_i]): sec(beat_t[start_i + TOTAL]) + sec(0.5)]
     bpm = float(np.atleast_1d(tempo)[0])
     source = os.path.basename(music_file)
-    print(f"Song: {source}, {bpm:.1f} BPM, Drop bei {beat_t[di]:.2f}s, Ausschnitt ab {beat_t[start_i]:.2f}s")
+    song_len = song.shape[1] / SR
+    # Zeiten (Sekunden im Song) auf den nächsten erkannten Beat einrasten
+    snap = lambda s: int(np.argmin(np.abs(beat_t - s)))  # noqa: E731
+    as_idx = (lambda v: snap(v)) if CFG.get("unit", "seconds") == "seconds" else (lambda v: int(v))
+    secs = [[k, as_idx(v)] for k, v in CFG["sections"]]
+    first = secs[0][1]
+    end_i = as_idx(CFG["end"]) if CFG.get("end") else len(beat_t) - 1
+    t0 = beat_t[first]
+    beats_s = beat_t[first: end_i + 1] - t0
+    print(f"Song: {source} · {bpm:.1f} BPM · Ausschnitt ab {t0:.2f}s · Abschnitte (Song-Sek.): "
+          + ", ".join(f"{k}@{beat_t[i]:.2f}" for k, i in secs))
+    secs = [[k, i - first] for k, i in secs]
+    end_s = min(beats_s[-1] + 0.25, song_len - t0)
+    music = song[:, sec(t0): sec(t0 + end_s)]
 else:
     music = load(f"{HERE}/music/phonk_slowed.wav")
-    bpm = CFG["bpm"]
-    beats_s = np.arange(TOTAL + 1) * 60 / bpm
+    bpm = 112.5
+    n = int(CFG.get("ownBeatEnd", 42))
+    beats_s = np.arange(n + 1) * 60 / bpm
+    secs = [[k, int(v)] for k, v in CFG.get("ownBeatSections", [["intro", 0], ["A", 8], ["S", 20], ["R", 28], ["O", 36]])]
+    end_s = beats_s[-1]
     source = "phonk_slowed.wav (eigener Beat)"
     print("Eigener Phonk-Beat,", bpm, "BPM")
 
-length_s = float(beats_s[-1])
-music = music[:, : sec(length_s)]
-# Endet die Musik bei TOTAL hart, sanft ausblenden
-music = fade(music, 0.005, 0.5)
+n_beats = len(beats_s) - 1
+bounds = [i for _, i in secs] + [n_beats]
+steps = CFG.get("steps", {"intro": 4, "A": 2, "R": 1, "S": 4})
+if not real_song:
+    steps = CFG.get("ownBeatSteps", {"intro": 8, "A": 1, "R": 0.5, "S": 2})
+sections = [{"kind": k, "from": i, "to": bounds[j + 1], "step": steps.get(k, 1)} for j, (k, i) in enumerate(secs)]
 
-beat = lambda i: float(np.interp(i, np.arange(len(beats_s)), beats_s))  # noqa: E731 (auch halbe Beats)
 
+def beat(i):
+    return float(np.interp(i, np.arange(len(beats_s)), beats_s))
+
+
+def sect(kind):
+    return next((s for s in sections if s["kind"] == kind), None)
+
+
+music = fade(music[:, : sec(end_s)], 0.005, 0.35)
+length_s = music.shape[1] / SR
 vox = Bus(length_s + 2)
 sfx = Bus(length_s + 2)
 
@@ -99,44 +111,48 @@ def vo(path):
         a = a.mean(1)
     if sr != SR:
         a = resample_poly(a, SR, sr)
-    a = a / np.max(np.abs(a)) * 0.75
-    return fade(a, 0.004, 0.03)
+    return fade(a / np.max(np.abs(a)) * 0.75, 0.004, 0.03)
 
 
-# Intro-Satz endet knapp vor dem Drop
+sfx_gain = 0.5 if real_song else 0.75
+
+# Intro-Satz: bei langem Intro gleich am Anfang, sonst knapp vor dem ersten Drop
 intro = vo(f"{ROOT}/audio/short/vo/intro.wav")
-intro_start = max(0.15, beat(DROP) - 0.3 - len(intro) / SR)
+first_cut = beat(sections[1]["from"])
+intro_start = 0.25 if first_cut > 5 else max(0.15, first_cut - 0.3 - len(intro) / SR)
 vox.add(reverb(stereo(intro), 0.8, 0.12, 7000, 4), intro_start, 1.0)
-# Outro: "Das ist …" / "Revanchie!" auf den Endcard-Beat
-O0 = DROP + 28
+
+# Outro: "Das ist …" endet knapp vor dem Logo, "Revanchie!" auf dem Logo-Beat
+O = sect("O")
+logo_t = beat(O["from"])
 das = vo(f"{ROOT}/audio/vo/L12.wav")
 rev = vo(f"{ROOT}/audio/vo/L13.wav")
-vox.add(reverb(stereo(das), 2.0, 0.2, 5000, 4), beat(O0 + 0.5), 1.0)
-logo_t = beat(O0 + 2.5)
+das_t = logo_t - 0.12 - len(das) / SR
+vox.add(reverb(stereo(das), 2.0, 0.2, 5000, 4), das_t, 1.0)
 vox.add(reverb(stereo(rev), 2.0, 0.2, 5000, 4), logo_t - 0.03, 1.1)
+sub_t = min(beat(O["from"] + 3), length_s - 0.5)
 
-# SFX – sparsam, nur wo das Bild "einschlägt"
+# SFX – sparsam, der Song soll tragen
 mc = lambda n, g=1.0: load(f"{ROOT}/audio/mc/{n}.ogg", g)  # noqa: E731
-sfx.add(impact(1.4, 2.4), beat(DROP), 0.75)
-sfx.add(mc("item_mace_smash_ground_heavy"), beat(DROP), 0.7)
-sfx.add(whoosh(0.35, 250, 6000, -0.6, 0.6, 51), beat(DROP + 12) - 0.25, 0.45)
-sfx.add(whoosh(0.3, 300, 7000, 0.6, -0.6, 52), beat(DROP + 20) - 0.2, 0.45)
-sfx.add(impact(1.2, 2.0), beat(O0), 0.5)
-sfx.add(mc("item_mace_smash_ground_heavy"), logo_t, 0.6)
-sfx.add(mc("item_totem_use_totem"), logo_t + 0.05, 0.35)
-sub_t = beat(O0 + 4.5)
+A = sect("A")
+sfx.add(impact(1.4, 2.4), beat(A["from"]), 0.9 * sfx_gain)
+sfx.add(mc("item_mace_smash_ground_heavy"), beat(A["from"]), 0.9 * sfx_gain)
+for k in ("R", "S"):
+    s = sect(k)
+    if s:
+        sfx.add(whoosh(0.35, 250, 6000, -0.6, 0.6, 50 + int(s["from"])), beat(s["from"]) - 0.25, 0.6 * sfx_gain)
+sfx.add(impact(1.6, 2.0), logo_t, 0.8 * sfx_gain)
+sfx.add(mc("item_mace_smash_ground_heavy"), logo_t, 0.9 * sfx_gain)
+sfx.add(mc("item_totem_use_totem"), logo_t + 0.05, 0.5 * sfx_gain)
 click = lp(np.random.default_rng(1).standard_normal(sec(0.03)), 6000) * np.exp(-np.arange(sec(0.03)) / SR * 300) * 0.5
 sfx.add(stereo(click), sub_t, 0.9)
-sfx.add(mc("block_bell_bell_use01"), sub_t + 0.03, 0.45)
+sfx.add(mc("block_bell_bell_use01"), sub_t + 0.03, 0.5)
 
-# Mix: Musik weicht der Stimme etwas aus
-n = sec(length_s)
-mus = np.zeros((2, n))
-mus[:, : min(n, music.shape[1])] = music[:, :n]
+# Mix
+n = music.shape[1]
 venv = lp(np.abs(vox.x[:, :n]).max(0), 20, 1)
-mus *= 1 - 0.45 * np.clip(venv / 0.1, 0, 1)
-mix = mus * 0.9 + sfx.x[:, :n] * 0.7 + vox.x[:, :n] * 1.2
-
+mus = music * (1 - 0.4 * np.clip(venv / 0.1, 0, 1))
+mix = mus * 0.9 + sfx.x[:, :n] * 0.7 + vox.x[:, :n] * 1.25
 try:
     import pyloudnorm as pyln
 
@@ -149,18 +165,18 @@ mix = np.tanh(mix / ceil) * ceil
 os.makedirs(f"{ROOT}/public/audio", exist_ok=True)
 sf.write(f"{ROOT}/public/audio/short.wav", mix.T, SR, subtype="PCM_24")
 
+f = lambda s: round(s * FPS, 1)  # noqa: E731
 out = {
     "source": source,
     "bpm": round(bpm, 2),
-    "dropBeat": DROP,
-    "totalBeats": TOTAL,
-    "beats": [round(float(t) * FPS, 2) for t in beats_s],  # Frames (Dezimal), Index = Beat
-    "introVo": [round(intro_start * FPS, 1), round((intro_start + len(intro) / SR) * FPS, 1)],
-    # "was" beginnt in intro.wav bei ~0,97 s (Whisper) -> Untertitel-Wechsel
-    "introSplit": round((intro_start + CFG.get("introSplitSec", 0.97)) * FPS, 1),
-    "logo": round(logo_t * FPS, 1),
-    "subscribe": round(sub_t * FPS, 1),
+    "beats": [round(float(t) * FPS, 2) for t in beats_s],
+    "sections": sections,
+    "introVo": [f(intro_start), f(intro_start + len(intro) / SR)],
+    "introSplit": f(intro_start + CFG.get("introSplitSec", 0.97)),
+    "dasIst": [f(das_t), f(das_t + len(das) / SR)],
+    "logo": f(logo_t),
+    "subscribe": f(sub_t),
     "durationInFrames": int(round(length_s * FPS)),
 }
 json.dump(out, open(f"{ROOT}/src/short/beats.json", "w"), indent=1)
-print("OK", round(length_s, 2), "s,", out["durationInFrames"], "Frames")
+print("OK", round(length_s, 2), "s,", out["durationInFrames"], "Frames ·", [(s["kind"], s["from"], s["to"], s["step"]) for s in sections])

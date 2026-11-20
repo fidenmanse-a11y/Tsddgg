@@ -1,8 +1,6 @@
 {
  "source": "phonk_slowed.wav (eigener Beat)",
  "bpm": 112.5,
- "dropBeat": 8,
- "totalBeats": 42,
  "beats": [
   0.0,
   32.0,
@@ -48,12 +46,48 @@
   1312.0,
   1344.0
  ],
+ "sections": [
+  {
+   "kind": "intro",
+   "from": 0,
+   "to": 8,
+   "step": 8
+  },
+  {
+   "kind": "A",
+   "from": 8,
+   "to": 20,
+   "step": 1
+  },
+  {
+   "kind": "S",
+   "from": 20,
+   "to": 28,
+   "step": 2
+  },
+  {
+   "kind": "R",
+   "from": 28,
+   "to": 36,
+   "step": 0.5
+  },
+  {
+   "kind": "O",
+   "from": 36,
+   "to": 42,
+   "step": 1
+  }
+ ],
  "introVo": [
   119.2,
   238.0
  ],
  "introSplit": 177.4,
- "logo": 1232.0,
- "subscribe": 1296.0,
+ "dasIst": [
+  1095.1,
+  1144.8
+ ],
+ "logo": 1152.0,
+ "subscribe": 1248.0,
  "durationInFrames": 1344
 }

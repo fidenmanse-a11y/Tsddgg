@@ -9,17 +9,20 @@ import { F, FONT_SPECS } from "../fonts";
 import BEATS from "./beats.json";
 
 // REVANCHIE – Phonk-Edit als YouTube Short (1080×1920, 60 fps).
-// Alles hängt am Beat-Raster aus beats.json (eigener Beat oder erkannter Song).
+// Schnitt und Effekte hängen komplett an beats.json:
+// erkannte Beats des Songs + Abschnitte (intro / A / R / S / O) aus src/short/config.json.
 
 export const SW = 1080;
 export const SH = 1920;
 
+type SectKind = "intro" | "A" | "R" | "S" | "O";
+type Sect = { kind: SectKind; from: number; to: number; step: number };
+
 const BT: number[] = BEATS.beats;
-const DROP = BEATS.dropBeat;
-const A1 = DROP + 12; // Drop-Teil: 1 Schnitt pro Beat
-const S1 = DROP + 20; // ruhiger Teil: 1 Schnitt pro 2 Beats
-const R1 = DROP + 28; // Schnellteil: 1 Schnitt pro halbem Beat
-const O0 = R1; // Endcard
+const SECTS = BEATS.sections as Sect[];
+const sectOf = (k: SectKind) => SECTS.find((s) => s.kind === k)!;
+const FIRST = SECTS.find((s) => s.kind !== "intro")!.from; // erster Drop
+const OUT = sectOf("O").from; // Logo / Endcard
 
 /** Frame von (auch gebrochenem) Beat-Index */
 const bf = (i: number) => {
@@ -32,18 +35,33 @@ const beatAt = (f: number) => {
   return BT.length - 1;
 };
 
-const SEQ_A = ["Rfj5lAsYpZs", "0c5uPCQwZO0", "QJw0v8rWq90", "WaBZP5Uy2nA", "cqVsmIshzLc", "Eq2_E58U2S8", "tS_BQ12nfjk", "2oXza_81aYY", "gtwiE_Cul84", "rbj0AadIZtE", "ZaLb3fu6j-Y", "veJacP4gTIU"];
-const SEQ_S = ["rAa4f9RQCP8", "QPQtvx-q1eo", "Rfj5lAsYpZs", "QJw0v8rWq90"];
-const SEQ_R = ["0c5uPCQwZO0", "WaBZP5Uy2nA", "cqVsmIshzLc", "Eq2_E58U2S8", "tS_BQ12nfjk", "2oXza_81aYY", "gtwiE_Cul84", "rbj0AadIZtE", "ZaLb3fu6j-Y", "veJacP4gTIU", "rAa4f9RQCP8", "QPQtvx-q1eo", "QJw0v8rWq90", "Rfj5lAsYpZs", "WaBZP5Uy2nA", "0c5uPCQwZO0"];
+// Reihenfolge der echten Thumbnails – bewusst gemischt (Farbe, Motiv, Nah/Weit)
+const POOL = ["Rfj5lAsYpZs", "0c5uPCQwZO0", "QJw0v8rWq90", "WaBZP5Uy2nA", "cqVsmIshzLc", "Eq2_E58U2S8", "tS_BQ12nfjk", "2oXza_81aYY", "gtwiE_Cul84", "rbj0AadIZtE", "ZaLb3fu6j-Y", "veJacP4gTIU", "rAa4f9RQCP8", "QPQtvx-q1eo"];
+const INTRO_POOL = ["WaBZP5Uy2nA", "QJw0v8rWq90", "cqVsmIshzLc", "0c5uPCQwZO0", "tS_BQ12nfjk", "Rfj5lAsYpZs"];
 
-type Shot = { id: string; from: number; to: number; kind: "card" | "full"; trans: "cut" | "whip" | "zoom" | "spin" | "glitch"; sect: "A" | "S" | "R" };
+type Trans = "cut" | "whip" | "zoom" | "spin" | "glitch";
+type Shot = { id: string; from: number; to: number; kind: "card" | "full"; trans: Trans; sect: SectKind; n: number };
 
 const SHOTS: Shot[] = (() => {
   const out: Shot[] = [];
-  const tA: Shot["trans"][] = ["cut", "whip", "zoom", "spin", "glitch", "whip"];
-  SEQ_A.forEach((id, i) => out.push({ id, from: DROP + i, to: DROP + i + 1, kind: i % 2 ? "full" : "card", trans: i === 0 ? "cut" : tA[i % tA.length], sect: "A" }));
-  SEQ_S.forEach((id, i) => out.push({ id, from: A1 + i * 2, to: A1 + i * 2 + 2, kind: "card", trans: "zoom", sect: "S" }));
-  SEQ_R.forEach((id, i) => out.push({ id, from: S1 + i * 0.5, to: S1 + i * 0.5 + 0.5, kind: "full", trans: i % 4 === 3 ? "glitch" : "cut", sect: "R" }));
+  let p = 0;
+  let n = 0;
+  const tA: Trans[] = ["whip", "zoom", "spin", "glitch", "whip", "cut"];
+  for (const s of SECTS) {
+    if (s.kind === "O") continue;
+    let k = 0;
+    for (let b = s.from; b < s.to - 1e-6; b += s.step, k++) {
+      const to = Math.min(s.to, b + s.step);
+      if (s.kind === "intro") {
+        out.push({ id: INTRO_POOL[k % INTRO_POOL.length], from: b, to, kind: k % 2 ? "full" : "card", trans: "cut", sect: "intro", n: n++ });
+        continue;
+      }
+      const id = POOL[p++ % POOL.length];
+      const kind: Shot["kind"] = s.kind === "S" ? "card" : s.kind === "R" ? "full" : k % 2 ? "full" : "card";
+      const trans: Trans = s.kind === "S" ? "zoom" : s.kind === "R" ? (k % 4 === 3 ? "glitch" : "cut") : k === 0 ? "cut" : tA[k % tA.length];
+      out.push({ id, from: b, to, kind, trans, sect: s.kind, n: n++ });
+    }
+  }
   return out;
 })();
 
@@ -71,12 +89,9 @@ const Caption: React.FC<{ text: string; size?: number; y?: number; t?: number; c
   </div>
 );
 
-const Background: React.FC<{ id: string; dim?: number; gray?: number }> = ({ id, dim = 0.45, gray = 0 }) => (
+const Background: React.FC<{ id: string; dim?: number }> = ({ id, dim = 0.45 }) => (
   <AbsoluteFill>
-    <Img
-      src={staticFile(thumb(id))}
-      style={{ width: SW, height: SH, objectFit: "cover", filter: `blur(38px) brightness(${dim}) saturate(${1.3 - gray}) grayscale(${gray})`, transform: "scale(1.2)" }}
-    />
+    <Img src={staticFile(thumb(id))} style={{ width: SW, height: SH, objectFit: "cover", filter: `blur(38px) brightness(${dim}) saturate(1.3)`, transform: "scale(1.2)" }} />
   </AbsoluteFill>
 );
 
@@ -84,32 +99,19 @@ const ShotView: React.FC<{ s: Shot; f: number }> = ({ s, f }) => {
   const start = bf(s.from);
   const end = bf(s.to);
   const age = f - start;
-  const len = end - start;
-  const p = clamp(age / len);
-  // Eintritt
+  const p = clamp(age / (end - start));
   let enter = "";
   if (s.trans === "whip") enter = `translateY(${lerp(SH * 0.9, 0, E.outExpo(clamp(age / 9)))}px)`;
   if (s.trans === "zoom") enter = `scale(${lerp(0.72, 1, E.outExpo(clamp(age / 10)))})`;
   if (s.trans === "spin") enter = `rotate(${lerp(-14, 0, E.outBack(clamp(age / 12)))}deg) scale(${lerp(1.25, 1, E.outExpo(clamp(age / 12)))})`;
-  // Phonk-"Velocity": langsamer Drift, der auf dem nächsten Beat einrastet
-  const drift = s.sect === "S" ? 1 + p * 0.06 : 1 + p * 0.035;
+  // "Velocity": langsamer Drift, der auf dem nächsten Schnitt einrastet
+  const drift = s.sect === "intro" ? 1 + p * 0.1 : s.sect === "S" ? 1 + p * 0.06 : 1 + p * 0.035;
 
   const v = VIDEOS[s.id];
+  const swing = s.sect === "S" ? `perspective(1600px) rotateY(${Math.sin(age / 26) * 16}deg) rotateX(${6 + Math.sin(age / 40) * 3}deg) ` : "";
   const card = (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-      <div
-        style={{
-          width: 1000,
-          height: 562,
-          borderRadius: 28,
-          overflow: "hidden",
-          boxShadow: "0 40px 90px rgba(0,0,0,0.7)",
-          transform:
-            s.sect === "S"
-              ? `perspective(1600px) rotateY(${Math.sin((f - start) / 26) * 16}deg) rotateX(${6 + Math.sin((f - start) / 40) * 3}deg) translateY(-90px) scale(${drift})`
-              : `translateY(-90px) scale(${drift})`,
-        }}
-      >
+      <div style={{ width: 1000, height: 562, borderRadius: 28, overflow: "hidden", boxShadow: "0 40px 90px rgba(0,0,0,0.7)", transform: `${swing}translateY(-90px) scale(${drift})` }}>
         <Img src={staticFile(thumb(s.id))} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
     </AbsoluteFill>
@@ -119,29 +121,30 @@ const ShotView: React.FC<{ s: Shot; f: number }> = ({ s, f }) => {
       <Img src={staticFile(thumb(s.id))} style={{ width: SW, height: SH, objectFit: "cover" }} />
     </AbsoluteFill>
   );
+  const showTitle = (s.sect === "A" && s.kind === "card") || s.sect === "S";
 
   const body = (
     <AbsoluteFill style={{ transform: enter }}>
       {s.kind === "card" && <Background id={s.id} />}
       {s.kind === "card" ? card : full}
-      {s.sect !== "R" && (
+      {showTitle && (
         <div
           style={{
             position: "absolute",
             left: 70,
             right: 70,
-            top: s.kind === "card" ? 1260 : 1300,
+            top: 1270,
             textAlign: "center",
             fontFamily: F.yt,
             fontWeight: 700,
-            fontSize: 44,
+            fontSize: 46,
             color: "#fff",
             textShadow: "0 3px 14px rgba(0,0,0,0.9)",
             opacity: clamp((age - 2) / 6),
           }}
         >
           {v.title}
-          <div style={{ fontWeight: 500, fontSize: 36, color: "#ddd", marginTop: 10 }}>{v.views} Aufrufe</div>
+          <div style={{ fontWeight: 500, fontSize: 38, color: "#ddd", marginTop: 10 }}>{v.views} Aufrufe</div>
         </div>
       )}
     </AbsoluteFill>
@@ -175,57 +178,49 @@ export const Short: React.FC = () => {
   }, [handle]);
 
   const b = beatAt(f);
-  const bi = Math.floor(b);
-  const sinceBeat = f - bf(bi);
-  const inMain = b >= DROP && b < O0;
+  const cur = [...SHOTS].reverse().find((s) => b >= s.from) ?? SHOTS[0];
+  const sinceCut = f - bf(cur.from);
+  const inMain = b >= FIRST && b < OUT;
+  const calm = cur.sect === "S";
 
-  // Punch auf jedem Beat, stärker auf der Eins, RGB-Split auf der Snare (3. Beat im Takt)
-  const isOne = (bi - DROP) % 4 === 0;
-  const isSnare = (bi - DROP) % 4 === 2;
-  const slow = b >= A1 && b < S1;
-  const punchAmp = inMain ? (slow ? 0.025 : isOne ? 0.11 : 0.06) : 0;
-  const punch = 1 + punchAmp * Math.exp(-sinceBeat / 7);
-  const shakeAmt = inMain && !slow ? (isOne ? 0.55 : 0.25) * Math.exp(-sinceBeat / 6) : 0;
-  const sh = shake(f, shakeAmt + (b >= DROP && b < DROP + 1 ? 0.8 * Math.exp(-(f - bf(DROP)) / 10) : 0), "short");
-  const ca = inMain && isSnare && !slow ? 16 * Math.exp(-sinceBeat / 5) : 0;
-  const flash = Math.max(
-    b >= DROP ? Math.exp(-(f - bf(DROP)) / 4) : 0,
-    b >= O0 ? 0.8 * Math.exp(-(f - bf(O0)) / 4) : 0,
-    b >= S1 && b < O0 && (f - bf(Math.floor(b * 2) / 2)) < 2 && Math.floor(b * 2) % 2 === 0 ? 0.25 : 0,
-  );
+  // Punch + Shake auf jedem Schnitt, stärker auf jedem zweiten; RGB-Split auf jedem zweiten
+  const strong = cur.n % 2 === 0;
+  const punchAmp = inMain ? (calm ? 0.025 : strong ? 0.1 : 0.06) : 0;
+  const punch = 1 + punchAmp * Math.exp(-sinceCut / 7);
+  const sinceDrop = f - bf(FIRST);
+  const shakeAmt = (inMain && !calm ? (strong ? 0.5 : 0.22) * Math.exp(-sinceCut / 6) : 0) + (sinceDrop >= 0 ? 0.9 * Math.exp(-sinceDrop / 10) : 0);
+  const sh = shake(f, shakeAmt, "short");
+  const ca = inMain && !calm && !strong ? 16 * Math.exp(-sinceCut / 5) : 0;
+  const sinceOut = f - bf(OUT);
+  const flash = Math.max(sinceDrop >= 0 ? Math.exp(-sinceDrop / 4) : 0, sinceOut >= 0 ? Math.exp(-sinceOut / 4) : 0);
 
   let scene: React.ReactNode;
 
-  if (b < DROP) {
-    // ---- INTRO: Schwarzweiß, Korn, langsamer Push. Untertitel zur Stimme.
-    const t = f / bf(DROP);
+  if (b < FIRST) {
+    // ---- INTRO: Schwarzweiß, Korn, langsame Shots. Untertitel zur Stimme.
     const [v0, v1] = BEATS.introVo;
-    const vt = (f - v0) / (v1 - v0);
     const flicker = 0.85 + 0.15 * rand(Math.floor(f / 3));
+    const toDrop = bf(FIRST) - f;
     scene = (
       <AbsoluteFill style={{ background: "#000" }}>
-        <AbsoluteFill style={{ filter: `grayscale(1) contrast(1.25) brightness(${0.75 * flicker})` }}>
-          <Background id="WaBZP5Uy2nA" dim={0.35} gray={1} />
-          <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-            <div style={{ width: 1000, height: 562, borderRadius: 28, overflow: "hidden", transform: `translateY(-90px) scale(${0.9 + Math.pow(t, 3) * 0.55})` }}>
-              <Img src={staticFile(thumb("WaBZP5Uy2nA"))} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </div>
-          </AbsoluteFill>
+        <AbsoluteFill style={{ filter: `grayscale(1) contrast(1.25) brightness(${0.78 * flicker})` }}>
+          <ShotView s={cur} f={f} />
         </AbsoluteFill>
-        {vt > -0.05 && f < BEATS.introSplit - 2 && <Caption text="OKAY…" t={(f - v0) / 8} size={110} />}
-        {f >= BEATS.introSplit - 2 && <Caption text="WAS IST DAS?!" t={(f - BEATS.introSplit + 2) / 8} size={130} color="#e9d6ff" />}
+        {f >= v0 - 3 && f < BEATS.introSplit - 2 && <Caption text="OKAY…" t={(f - v0) / 8} size={110} />}
+        {f >= BEATS.introSplit - 2 && f < v1 + 50 && <Caption text="WAS IST DAS?!" t={(f - BEATS.introSplit + 2) / 8} size={130} color="#e9d6ff" />}
+        {/* letzter Beat vor dem Drop: Bild zieht sich zusammen */}
+        <AbsoluteFill style={{ background: "#000", opacity: toDrop < 24 ? (1 - toDrop / 24) * 0.7 : 0 }} />
         <Grain opacity={0.16} />
         <Vignette strength={0.85} />
       </AbsoluteFill>
     );
-  } else if (b < O0) {
+  } else if (b < OUT) {
     // ---- Haupt-Edit
-    const cur = [...SHOTS].reverse().find((s) => b >= s.from) ?? SHOTS[0];
-    const dropT = f - bf(DROP);
+    const [d0, d1] = BEATS.dasIst;
     scene = (
       <AbsoluteFill style={{ background: "#000" }}>
         <ShotView s={cur} f={f} />
-        {b < DROP + 1.5 && (
+        {sinceDrop < 60 && (
           <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
             <div
               style={{
@@ -235,23 +230,25 @@ export const Short: React.FC = () => {
                 letterSpacing: 6,
                 WebkitTextStroke: "18px #000",
                 paintOrder: "stroke fill",
-                transform: `translateY(-90px) scale(${lerp(2.2, 1, E.outExpo(clamp(dropT / 9)))})`,
-                opacity: clamp(1 - (dropT - 40) / 12),
+                transform: `translateY(-90px) scale(${lerp(2.2, 1, E.outExpo(clamp(sinceDrop / 9)))})`,
+                opacity: clamp(1 - (sinceDrop - 44) / 12),
               }}
             >
               REVANCHIE
             </div>
           </AbsoluteFill>
         )}
+        {f >= d0 - 2 && <Caption text="DAS IST …" t={(f - d0 + 2) / 8} size={120} y={360} />}
+        {/* kurz vor dem Logo: alles dunkelt ab */}
+        <AbsoluteFill style={{ background: "#000", opacity: f > d0 ? clamp((f - d0) / (bf(OUT) - d0)) * 0.6 : 0 }} />
         <Grain opacity={0.06} />
         <Vignette strength={0.45} />
       </AbsoluteFill>
     );
+    void d1;
   } else {
-    // ---- ENDCARD
-    const t = f - bf(O0);
-    const logo = BEATS.logo;
-    const lt = f - logo;
+    // ---- LOGO + ENDCARD auf dem großen Drop
+    const lt = f - BEATS.logo;
     const subbed = f >= BEATS.subscribe;
     const tap = f >= BEATS.subscribe - 4 && f < BEATS.subscribe + 6;
     scene = (
@@ -260,31 +257,19 @@ export const Short: React.FC = () => {
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", transform: "translateY(-120px)" }}>
           <Img
             src={staticFile(CHANNEL.avatar)}
-            style={{
-              width: 360,
-              height: 360,
-              borderRadius: 180,
-              border: "12px solid #fff",
-              transform: `scale(${lerp(0.4, 1, E.outBack(clamp(t / 14)))})`,
-            }}
+            style={{ width: 360, height: 360, borderRadius: 180, border: "12px solid #fff", transform: `scale(${lerp(2.4, 1, E.outExpo(clamp(lt / 10)))})` }}
           />
           <div style={{ height: 40 }} />
-          {lt >= 0 ? (
-            <div style={{ fontFamily: F.display, fontSize: 200, color: "#fff", letterSpacing: 8, WebkitTextStroke: "14px #000", paintOrder: "stroke fill", display: "flex" }}>
-              {"REVANCHIE".split("").map((c, i) => {
-                const k = clamp((lt - i * 1.5) / 6);
-                return (
-                  <span key={i} style={{ display: "inline-block", opacity: k > 0 ? 1 : 0, transform: `scale(${lerp(2.2, 1, E.outExpo(k))})` }}>
-                    {c}
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ fontFamily: F.cine, fontWeight: 300, fontSize: 64, letterSpacing: 24, color: "#fff", opacity: clamp((t - 10) / 10), height: 200, display: "flex", alignItems: "center" }}>
-              DAS IST
-            </div>
-          )}
+          <div style={{ fontFamily: F.display, fontSize: 200, color: "#fff", letterSpacing: 8, WebkitTextStroke: "14px #000", paintOrder: "stroke fill", display: "flex" }}>
+            {"REVANCHIE".split("").map((c, i) => {
+              const k = clamp((lt - i * 1.5) / 6);
+              return (
+                <span key={i} style={{ display: "inline-block", opacity: k > 0 ? 1 : 0, transform: `scale(${lerp(2.2, 1, E.outExpo(k))})` }}>
+                  {c}
+                </span>
+              );
+            })}
+          </div>
           <div style={{ fontFamily: F.yt, fontSize: 40, color: "#ccc", marginTop: 18, opacity: clamp(lt / 12) }}>
             {CHANNEL.handle} · {CHANNEL.subscribers}
           </div>
@@ -292,7 +277,6 @@ export const Short: React.FC = () => {
             <SubscribeButton state={subbed ? 1 : 0} scale={1.5} />
           </div>
         </AbsoluteFill>
-        {/* Tap-Kreis wie auf dem Handy */}
         {f >= BEATS.subscribe - 2 && f < BEATS.subscribe + 22 && (
           <div
             style={{
@@ -310,17 +294,20 @@ export const Short: React.FC = () => {
         )}
         <Grain opacity={0.08} />
         <Vignette strength={0.6} />
-        <AbsoluteFill style={{ background: "#000", opacity: clamp((f - (BEATS.durationInFrames - 18)) / 17) }} />
       </AbsoluteFill>
     );
   }
 
+  const sinceLogo = f - BEATS.logo;
+  const logoShake = sinceLogo >= 0 ? shake(f, 0.9 * Math.exp(-sinceLogo / 10), "logo") : { x: 0, y: 0, r: 0 };
+
   return (
     <AbsoluteFill style={{ background: "#000", overflow: "hidden" }}>
-      <Chroma amount={ca} angle={0.4}>
-        <AbsoluteFill style={{ transform: `translate(${sh.x}px, ${sh.y}px) rotate(${sh.r}deg) scale(${punch})` }}>{scene}</AbsoluteFill>
+      <Chroma amount={ca + (sinceLogo >= 0 ? 20 * Math.exp(-sinceLogo / 8) : 0)} angle={0.4}>
+        <AbsoluteFill style={{ transform: `translate(${sh.x + logoShake.x}px, ${sh.y + logoShake.y}px) rotate(${sh.r + logoShake.r}deg) scale(${punch})` }}>{scene}</AbsoluteFill>
       </Chroma>
       <Flash opacity={Math.min(1, flash)} />
+      <AbsoluteFill style={{ background: "#000", opacity: clamp((f - (BEATS.durationInFrames - 14)) / 13) }} />
       <Audio src={staticFile("audio/short.wav")} />
     </AbsoluteFill>
   );

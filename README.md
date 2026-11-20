@@ -81,14 +81,32 @@ Ablauf (in Beats, Drop = Beat 8):
 
 ## Eigenen Song einsetzen (z. B. „Medusa (Slowed)“)
 
-1. Song als MP3/WAV nach `audio/short/music/` legen (wird von Git ignoriert).
-2. In `src/short/config.json` `"musicFile": "audio/short/music/medusa.mp3"` eintragen.
-   Falls der Drop falsch erkannt wird, `"dropAt": <Sekunde im Song>` setzen.
+1. Song als Audio- **oder Videodatei** (z. B. Bildschirmaufnahme vom Handy) nach `audio/short/music/` legen. Der Ordner wird von Git ignoriert, fremde Songs landen also nicht im Repo.
+2. In `src/short/config.json` eintragen:
+   - `musicFile`: Pfad zur Datei
+   - `sections`: Startzeiten (Sekunden in der Datei) der Teile
+     - `intro`: Schwarz-Weiß
+     - `A`: Drop, Schnitt alle 2 Beats
+     - `R`: Schnitt auf jedem Beat
+     - `S`: 3D-Karte / Breakdown
+     - `O`: Logo + Endcard
+   - `end`: Ende
+   Die Zeiten rasten automatisch auf die erkannten Beats ein.
 3. Audio neu bauen (braucht zusätzlich `librosa`) und rendern:
    ```bash
    python audio/short/build_short.py
    npx remotion render RevanchieShort out/revanchie-short.mp4 --codec=h264 --crf=17 --audio-bitrate=320k
    ```
-Tempo, Beats und Drop werden automatisch erkannt. Alle Schnitte und Effekte springen auf die neuen Beats.
 
-Ohne eigenen Song läuft `audio/short/music/phonk_slowed.wav`. Das ist ein selbst produzierter Slowed-Phonk-Beat (`audio/short/phonk.py`, 112,5 BPM) ohne Claim-Risiko.
+Die aktuelle `config.json` ist auf die Medusa-Bildschirmaufnahme eingestellt:
+
+| Teil | Start in der Aufnahme |
+|---|---|
+| Intro | 1,18 s |
+| Drop | 9,31 s |
+| Schnellteil | 18,58 s |
+| Breakdown | 21,27 s |
+| großer Drop = Logo | 25,52 s |
+| Ende | 27,82 s |
+
+Fehlt die Datei, nimmt der Build automatisch den eigenen Beat `audio/short/music/phonk_slowed.wav` (`audio/short/phonk.py`, 112,5 BPM, ohne Claim-Risiko) mit den Abschnitten aus `ownBeatSections`. Diese Version liegt als `release/revanchie-short.mp4` im Repo.

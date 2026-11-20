@@ -1,8 +1,10 @@
 {
   "fps": 60,
-  "bpm": 112.5,
-  "dropBeat": 8,
-  "totalBeats": 42,
-  "musicFile": "",
-  "dropAt": null
+  "musicFile": "audio/short/music/medusa_recording.mp4",
+  "unit": "seconds",
+  "sections": [["intro", 1.18], ["A", 9.31], ["R", 18.58], ["S", 21.27], ["O", 25.52]],
+  "end": 27.82,
+  "steps": { "intro": 4, "A": 2, "R": 1, "S": 4 },
+  "ownBeatSections": [["intro", 0], ["A", 8], ["S", 20], ["R", 28], ["O", 36]],
+  "ownBeatEnd": 42
 }
