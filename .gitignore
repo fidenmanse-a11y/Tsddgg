@@ -2,3 +2,5 @@ node_modules
 out
 *.log
 .DS_Store
+audio/short/music/*
+!audio/short/music/phonk_slowed.wav

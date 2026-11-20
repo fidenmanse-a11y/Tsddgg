@@ -60,3 +60,35 @@ Pro Zeile wurden 3–5 Takes erzeugt. `audio/select_vo.py` transkribiert jeden T
 | Schriften | Anton, Roboto, Inter, Pixelify Sans (SIL OFL) | Frei |
 
 Die YouTube- und Minecraft-Oberflächen sind eigene Nachzeichnungen, keine Screenshots.
+
+---
+
+# REVANCHIE – Phonk-Edit (YouTube Short)
+
+**Datei:** `release/revanchie-short.mp4` · 1080×1920 · 60 fps · 22,4 s · −14 LUFS
+Komposition `RevanchieShort` in `src/short/Short.tsx`. Der ganze Schnitt hängt am Beat-Raster in `src/short/beats.json`.
+
+Ablauf (in Beats, Drop = Beat 8):
+
+| Beats | Teil |
+|---|---|
+| 0–8 | Intro: Schwarz-Weiß + Korn, Push aufs Holzschwert-Thumbnail, „Okay… was ist DAS?!“ |
+| 8 | Drop: Flash, Shake, „REVANCHIE“-Slam, Farbe kommt zurück |
+| 8–20 | 1 Schnitt pro Beat, Zoom-Punch auf jedem Beat, RGB-Split auf der Snare, wechselnde Übergänge |
+| 20–28 | ruhiger Teil: schwebende 3D-Karte, 1 Schnitt pro 2 Beats |
+| 28–36 | Schnellteil: 1 Schnitt pro halbem Beat |
+| 36–42 | Endcard: „Das ist … REVANCHIE“, Abo-Tap |
+
+## Eigenen Song einsetzen (z. B. „Medusa (Slowed)“)
+
+1. Song als MP3/WAV nach `audio/short/music/` legen (wird von Git ignoriert).
+2. In `src/short/config.json` `"musicFile": "audio/short/music/medusa.mp3"` eintragen.
+   Falls der Drop falsch erkannt wird, `"dropAt": <Sekunde im Song>` setzen.
+3. Audio neu bauen (braucht zusätzlich `librosa`) und rendern:
+   ```bash
+   python audio/short/build_short.py
+   npx remotion render RevanchieShort out/revanchie-short.mp4 --codec=h264 --crf=17 --audio-bitrate=320k
+   ```
+Tempo, Beats und Drop werden automatisch erkannt. Alle Schnitte und Effekte springen auf die neuen Beats.
+
+Ohne eigenen Song läuft `audio/short/music/phonk_slowed.wav`. Das ist ein selbst produzierter Slowed-Phonk-Beat (`audio/short/phonk.py`, 112,5 BPM) ohne Claim-Risiko.
