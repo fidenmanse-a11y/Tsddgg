@@ -28,6 +28,13 @@ TOTAL = CFG["totalBeats"]
 
 
 def load_music(path):
+    """Audio- ODER Videodatei (z. B. Bildschirmaufnahme .mp4/.mov) -> Stereo 48 kHz."""
+    if os.path.splitext(path)[1].lower() not in (".wav", ".flac", ".ogg"):
+        import subprocess
+        import tempfile
+        tmp = os.path.join(tempfile.mkdtemp(), "music.wav")
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", path, "-vn", "-ac", "2", "-ar", str(SR), tmp], check=True)
+        path = tmp
     a, sr = sf.read(path, dtype="float64", always_2d=True)
     a = a.T
     if a.shape[0] == 1:
@@ -56,7 +63,9 @@ if music_file and os.path.exists(music_path):
     if CFG.get("dropAt") is not None:
         di = int(np.argmin(np.abs(beat_t - CFG["dropAt"])))
     else:
-        score = [e[i:i + 8].mean() - e[max(0, i - 8):i].mean() if i >= DROP and i + 8 < len(e) else -1e9 for i in range(len(e))]
+        # nur Drops, nach denen noch genug Song für den ganzen Edit kommt
+        room = TOTAL - DROP
+        score = [e[i:i + 8].mean() - e[max(0, i - 8):i].mean() if i >= DROP and i + room < len(beat_t) and i + 8 < len(e) else -1e9 for i in range(len(e))]
         di = int(np.argmax(score))
     start_i = di - DROP
     if start_i < 0 or start_i + TOTAL >= len(beat_t):
