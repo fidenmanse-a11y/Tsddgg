@@ -1,20 +1,149 @@
 {
-  "fps": 60,
-  "musicFile": "audio/short/music/medusa_full.mov",
-  "unit": "beats",
-  "sections": [
-    ["intro", 48, 4],
-    ["A", 64, 2],
-    ["R", 80, 1],
-    ["A", 88, 2],
-    ["F", 104, 2],
-    ["A", 112, 2],
-    ["Q", 124, 0.5],
-    ["O", 128]
+ "fps": 60,
+ "musicFile": "audio/short/music/medusa_full.mov",
+ "unit": "beats",
+ "sections": [
+  [
+   "intro",
+   48,
+   4
   ],
-  "end": 134,
-  "voice": false,
-  "sfx": false,
-  "ownBeatSections": [["intro", 0, 8], ["A", 8, 1], ["F", 20, 2], ["R", 28, 0.5], ["O", 36]],
-  "ownBeatEnd": 42
+  [
+   "A",
+   64,
+   2
+  ],
+  [
+   "R",
+   80,
+   1
+  ],
+  [
+   "A",
+   88,
+   2
+  ],
+  [
+   "F",
+   104,
+   2
+  ],
+  [
+   "A",
+   112,
+   2
+  ],
+  [
+   "Q",
+   124,
+   0.5
+  ],
+  [
+   "O",
+   128
+  ]
+ ],
+ "end": 134,
+ "voice": false,
+ "sfx": false,
+ "ownBeatSections": [
+  [
+   "intro",
+   0,
+   8
+  ],
+  [
+   "A",
+   8,
+   1
+  ],
+  [
+   "F",
+   20,
+   2
+  ],
+  [
+   "R",
+   28,
+   0.5
+  ],
+  [
+   "O",
+   36
+  ]
+ ],
+ "ownBeatEnd": 42,
+ "_editVorlage": "So sieht eine Abfolge aus (Test mit Ersatz-Clips). Echte Clips: in audio/short/clips_in legen, prep_clips.py laufen lassen, dann 'introEdit' und 'edit' mit ihren Namen füllen.",
+ "editExample": {
+  "introEdit": [
+   {
+    "t": "clip",
+    "clip": "TEST_a",
+    "beats": 8,
+    "hitBeat": 4,
+    "hit": 3.2,
+    "ramp": "steady"
+   },
+   {
+    "t": "clip",
+    "clip": "TEST_b",
+    "beats": 8,
+    "hitBeat": 4,
+    "hit": 2.6,
+    "ramp": "steady",
+    "focus": 0.4,
+    "focusTo": 0.6
+   }
+  ],
+  "edit": [
+   {
+    "t": "clip",
+    "clip": "TEST_c",
+    "beats": 4,
+    "hitBeat": 0,
+    "hit": 2.6
+   },
+   {
+    "t": "thumb",
+    "video": "Rfj5lAsYpZs",
+    "beats": 2
+   },
+   {
+    "t": "clip",
+    "clip": "TEST_a",
+    "beats": 6,
+    "hitBeat": 2,
+    "hit": 4.8,
+    "focus": 0.45
+   },
+   {
+    "t": "clip",
+    "clip": "TEST_b",
+    "beats": 4,
+    "hitBeat": 1,
+    "hit": 4.6
+   },
+   {
+    "t": "thumb",
+    "video": "QJw0v8rWq90",
+    "beats": 2
+   },
+   {
+    "t": "clip",
+    "clip": "TEST_c",
+    "beats": 6,
+    "hitBeat": 2,
+    "hit": 6.7,
+    "text": "SPEAR MACE"
+   },
+   {
+    "t": "clip",
+    "clip": "TEST_a",
+    "beats": 4,
+    "hitBeat": 1,
+    "hit": 6.4,
+    "ramp": "fast"
+   }
+  ]
+ }
 }

@@ -4,3 +4,5 @@ out
 .DS_Store
 audio/short/music/*
 !audio/short/music/phonk_slowed.wav
+audio/short/clips_in/
+public/clips/

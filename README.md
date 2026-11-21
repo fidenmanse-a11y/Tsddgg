@@ -110,3 +110,24 @@ Die aktuelle `config.json` ist auf die Medusa-Bildschirmaufnahme eingestellt:
 | Ende | 27,82 s |
 
 Fehlt die Datei, nimmt der Build automatisch den eigenen Beat `audio/short/music/phonk_slowed.wav` (`audio/short/phonk.py`, 112,5 BPM, ohne Claim-Risiko) mit den Abschnitten aus `ownBeatSections`. Diese Version liegt als `release/revanchie-short.mp4` im Repo.
+
+## Clip-Edit (`RevanchieEdit`, `src/short/ClipEdit.tsx`)
+
+Ablauf: **Thumbnail** (komplett sichtbar, knallt auf den Beat) → **Gameplay-Clips aus diesem Video** → nächstes Thumbnail …
+
+1. Clips (MP4/MOV) nach `audio/short/clips_in/` legen, dann `python audio/short/prep_clips.py` ausführen. Das Skript
+   - entfernt den Originalton,
+   - wandelt in 60 fps um,
+   - findet Action-Momente (Bewegung + Lautstärke-Spitzen) und schreibt sie nach `src/short/clips_auto.json`.
+2. In `src/short/config.json` die Abfolge `introEdit` (Intro, Schwarz-Weiß) und `edit` (ab dem Drop) eintragen, Vorlage siehe `editExample`. Pro Eintrag:
+   - `t`: `thumb` oder `clip`
+   - `beats`: Länge
+   - `clip` / `video`
+   - `hit`: Sekunde im Clip, die auf dem Beat landet
+   - `hitBeat`: auf welchem Beat des Eintrags
+   - `ramp`: `slowhit` (Zeitlupe nach dem Hit), `steady` oder `fast`
+   - `focus` / `focusTo`: Hochformat-Ausschnitt 0..1
+   - `zoom`, `text`
+3. `python audio/short/build_short.py` und `npx remotion render RevanchieEdit out/edit.mp4`.
+
+Der Originalton der Clips wird nie verwendet. Die Musik kommt nur aus `musicFile`.

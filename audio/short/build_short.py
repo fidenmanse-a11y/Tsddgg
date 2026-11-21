@@ -209,5 +209,31 @@ out = {
     "voice": USE_VOICE,
     "env": envelopes(music),
 }
+# Clip-Edit: Abfolge aus Thumbnails + Gameplay-Clips auf Beats legen
+def place(items, start_beat, limit):
+    res = []
+    b = start_beat
+    for it in items:
+        n = float(it.get("beats", 2))
+        if b + n > limit + 1e-6:
+            print("WARNUNG: Abfolge länger als Platz bis Beat", limit, "– Rest weggelassen")
+            break
+        res.append(dict(it, **{"from": b, "to": b + n}))
+        b += n
+    if b < limit - 1e-6:
+        print(f"Hinweis: Abfolge endet bei Beat {b}, Platz bis {limit}")
+    return res
+
+
+if CFG.get("edit"):
+    intro_s = sections[0]
+    drop_b = sections[1]["from"]
+    out["introItems"] = place(CFG.get("introEdit", []), intro_s["from"], drop_b)
+    out["items"] = place(CFG["edit"], drop_b, O["from"])
+    out["dropBeat"] = drop_b
+    out["outBeat"] = O["from"]
+    auto_path = f"{ROOT}/src/short/clips_auto.json"
+    out["clips"] = json.load(open(auto_path)) if os.path.exists(auto_path) else {}
+
 json.dump(out, open(f"{ROOT}/src/short/beats.json", "w"), indent=1)
 print("OK", round(length_s, 2), "s,", out["durationInFrames"], "Frames ·", [(s["kind"], s["from"], s["to"], s["step"]) for s in sections])
