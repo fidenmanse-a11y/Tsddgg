@@ -1,10 +1,20 @@
 {
   "fps": 60,
-  "musicFile": "audio/short/music/medusa_recording.mp4",
-  "unit": "seconds",
-  "sections": [["intro", 1.18], ["A", 9.31], ["R", 18.58], ["S", 21.27], ["O", 25.52]],
-  "end": 27.82,
-  "steps": { "intro": 4, "A": 2, "R": 1, "S": 4 },
-  "ownBeatSections": [["intro", 0], ["A", 8], ["S", 20], ["R", 28], ["O", 36]],
+  "musicFile": "audio/short/music/medusa_full.mov",
+  "unit": "beats",
+  "sections": [
+    ["intro", 48, 4],
+    ["A", 64, 2],
+    ["R", 80, 1],
+    ["A", 88, 2],
+    ["F", 104, 2],
+    ["A", 112, 2],
+    ["Q", 124, 0.5],
+    ["O", 128]
+  ],
+  "end": 134,
+  "voice": false,
+  "sfx": false,
+  "ownBeatSections": [["intro", 0, 8], ["A", 8, 1], ["F", 20, 2], ["R", 28, 0.5], ["O", 36]],
   "ownBeatEnd": 42
 }

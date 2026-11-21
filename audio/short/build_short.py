@@ -63,14 +63,14 @@ if real_song:
     # Zeiten (Sekunden im Song) auf den nächsten erkannten Beat einrasten
     snap = lambda s: int(np.argmin(np.abs(beat_t - s)))  # noqa: E731
     as_idx = (lambda v: snap(v)) if CFG.get("unit", "seconds") == "seconds" else (lambda v: int(v))
-    secs = [[k, as_idx(v)] for k, v in CFG["sections"]]
+    secs = [[e[0], as_idx(e[1])] + list(e[2:]) for e in CFG["sections"]]
     first = secs[0][1]
     end_i = as_idx(CFG["end"]) if CFG.get("end") else len(beat_t) - 1
     t0 = beat_t[first]
     beats_s = beat_t[first: end_i + 1] - t0
     print(f"Song: {source} · {bpm:.1f} BPM · Ausschnitt ab {t0:.2f}s · Abschnitte (Song-Sek.): "
-          + ", ".join(f"{k}@{beat_t[i]:.2f}" for k, i in secs))
-    secs = [[k, i - first] for k, i in secs]
+          + ", ".join(f"{e[0]}@{beat_t[e[1]]:.2f}" for e in secs))
+    secs = [[e[0], e[1] - first] + list(e[2:]) for e in secs]
     end_s = min(beats_s[-1] + 0.25, song_len - t0)
     music = song[:, sec(t0): sec(t0 + end_s)]
 else:
@@ -78,17 +78,17 @@ else:
     bpm = 112.5
     n = int(CFG.get("ownBeatEnd", 42))
     beats_s = np.arange(n + 1) * 60 / bpm
-    secs = [[k, int(v)] for k, v in CFG.get("ownBeatSections", [["intro", 0], ["A", 8], ["S", 20], ["R", 28], ["O", 36]])]
+    secs = [[e[0], int(e[1])] + list(e[2:]) for e in CFG.get("ownBeatSections", [["intro", 0], ["A", 8], ["S", 20], ["R", 28], ["O", 36]])]
     end_s = beats_s[-1]
     source = "phonk_slowed.wav (eigener Beat)"
     print("Eigener Phonk-Beat,", bpm, "BPM")
 
 n_beats = len(beats_s) - 1
-bounds = [i for _, i in secs] + [n_beats]
+bounds = [e[1] for e in secs] + [n_beats]
 steps = CFG.get("steps", {"intro": 4, "A": 2, "R": 1, "S": 4})
 if not real_song:
     steps = CFG.get("ownBeatSteps", {"intro": 8, "A": 1, "R": 0.5, "S": 2})
-sections = [{"kind": k, "from": i, "to": bounds[j + 1], "step": steps.get(k, 1)} for j, (k, i) in enumerate(secs)]
+sections = [{"kind": e[0], "from": e[1], "to": bounds[j + 1], "step": e[2] if len(e) > 2 else steps.get(e[0], 1)} for j, e in enumerate(secs)]
 
 
 def beat(i):
@@ -116,11 +116,14 @@ def vo(path):
 
 sfx_gain = 0.5 if real_song else 0.75
 
+USE_VOICE = CFG.get("voice", True)
+USE_SFX = CFG.get("sfx", True)
 # Intro-Satz: bei langem Intro gleich am Anfang, sonst knapp vor dem ersten Drop
 intro = vo(f"{ROOT}/audio/short/vo/intro.wav")
 first_cut = beat(sections[1]["from"])
 intro_start = 0.25 if first_cut > 5 else max(0.15, first_cut - 0.3 - len(intro) / SR)
-vox.add(reverb(stereo(intro), 0.8, 0.12, 7000, 4), intro_start, 1.0)
+if USE_VOICE:
+    vox.add(reverb(stereo(intro), 0.8, 0.12, 7000, 4), intro_start, 1.0)
 
 # Outro: "Das ist …" endet knapp vor dem Logo, "Revanchie!" auf dem Logo-Beat
 O = sect("O")
@@ -128,8 +131,9 @@ logo_t = beat(O["from"])
 das = vo(f"{ROOT}/audio/vo/L12.wav")
 rev = vo(f"{ROOT}/audio/vo/L13.wav")
 das_t = logo_t - 0.12 - len(das) / SR
-vox.add(reverb(stereo(das), 2.0, 0.2, 5000, 4), das_t, 1.0)
-vox.add(reverb(stereo(rev), 2.0, 0.2, 5000, 4), logo_t - 0.03, 1.1)
+if USE_VOICE:
+    vox.add(reverb(stereo(das), 2.0, 0.2, 5000, 4), das_t, 1.0)
+    vox.add(reverb(stereo(rev), 2.0, 0.2, 5000, 4), logo_t - 0.03, 1.1)
 sub_t = min(beat(O["from"] + 3), length_s - 0.5)
 
 # SFX – sparsam, der Song soll tragen
@@ -148,6 +152,9 @@ click = lp(np.random.default_rng(1).standard_normal(sec(0.03)), 6000) * np.exp(-
 sfx.add(stereo(click), sub_t, 0.9)
 sfx.add(mc("block_bell_bell_use01"), sub_t + 0.03, 0.5)
 
+if not USE_SFX:
+    sfx.x[:] = 0
+
 # Mix
 n = music.shape[1]
 venv = lp(np.abs(vox.x[:, :n]).max(0), 20, 1)
@@ -165,6 +172,28 @@ mix = np.tanh(mix / ceil) * ceil
 os.makedirs(f"{ROOT}/public/audio", exist_ok=True)
 sf.write(f"{ROOT}/public/audio/short.wav", mix.T, SR, subtype="PCM_24")
 
+def envelopes(x):
+    """Kick- (<120 Hz) und Snare/Clap-Hüllkurve (1,5–6 kHz) pro Video-Frame, 0..1."""
+    from scipy.signal import butter, sosfilt
+    mono = x.mean(0)
+    hop = SR // FPS
+    nfr = mono.shape[0] // hop
+    out = {}
+    for name, sos in (("kick", butter(4, 120, "low", fs=SR, output="sos")),
+                      ("snare", butter(4, [1500, 6000], "band", fs=SR, output="sos"))):
+        band = sosfilt(sos, mono)
+        e = np.sqrt(np.add.reduceat(band[: nfr * hop] ** 2, np.arange(0, nfr * hop, hop)) / hop)
+        on = np.maximum(0, np.diff(e, prepend=e[0]))           # Anstieg = Onset
+        on = on / (np.percentile(on, 99.5) + 1e-9)
+        env = np.zeros(nfr)
+        acc = 0.0
+        for i in range(nfr):                                   # sofortiger Attack, exponentieller Release
+            acc = max(on[i], acc * np.exp(-1 / 6))
+            env[i] = min(1.0, acc)
+        out[name] = [round(float(v), 3) for v in env]
+    return out
+
+
 f = lambda s: round(s * FPS, 1)  # noqa: E731
 out = {
     "source": source,
@@ -177,6 +206,8 @@ out = {
     "logo": f(logo_t),
     "subscribe": f(sub_t),
     "durationInFrames": int(round(length_s * FPS)),
+    "voice": USE_VOICE,
+    "env": envelopes(music),
 }
 json.dump(out, open(f"{ROOT}/src/short/beats.json", "w"), indent=1)
 print("OK", round(length_s, 2), "s,", out["durationInFrames"], "Frames ·", [(s["kind"], s["from"], s["to"], s["step"]) for s in sections])
